@@ -1,6 +1,7 @@
 package day02
 
 import DayPuzzle
+import day02.HandShape.*
 
 fun main() {
     DayPuzzle<Int>("02")
@@ -11,10 +12,8 @@ fun main() {
 data object Part1 : DayPuzzle.PartPuzzle<Int>("Part 1", 15) {
     override fun solve(input: List<String>): Int {
         return input
-            .map { line ->
-                val (other, self) = line.split(" ")
-                Match(HandShape.guessFromSelf(self), HandShape.fromString(other))
-            }
+            .map { splitFromSpace(it) }
+            .map { Match(HandShape.guessFromSelf(it.second), HandShape.fromString(it.first)) }
             .score()
     }
 }
@@ -22,10 +21,8 @@ data object Part1 : DayPuzzle.PartPuzzle<Int>("Part 1", 15) {
 data object Part2 : DayPuzzle.PartPuzzle<Int>("Part 2", 12) {
     override fun solve(input: List<String>): Int {
         return input
-            .map { line ->
-                val (opponent, outcome) = line.split(" ")
-                Pair(HandShape.fromString(opponent), Outcome.fromString(outcome))
-            }
+            .map { splitFromSpace(it) }
+            .map { Pair(HandShape.fromString(it.first), Outcome.fromString(it.second)) }
             .map { (opponent, outcome) -> Match(chooseHandShape(opponent, outcome), opponent) }
             .score()
     }
@@ -33,15 +30,8 @@ data object Part2 : DayPuzzle.PartPuzzle<Int>("Part 2", 12) {
 
 typealias Point = Int
 
-enum class HandShape {
-    Rock, Paper, Scissors;
-
-    val point: Point
-        get() = when (this) {
-            Rock -> 1
-            Paper -> 2
-            Scissors -> 3
-        }
+enum class HandShape(val point: Point) {
+    Rock(1), Paper(2), Scissors(3);
 
     companion object {
         fun fromString(value: String): HandShape {
@@ -49,7 +39,16 @@ enum class HandShape {
                 "A" -> Rock
                 "B" -> Paper
                 "C" -> Scissors
-                else -> throw IllegalArgumentException("Unknown value: $value")
+                else -> error("Unknown value: $value")
+            }
+        }
+
+        fun guessFromSelf(value: String): HandShape {
+            return when (value) {
+                "X" -> Rock
+                "Y" -> Paper
+                "Z" -> Scissors
+                else -> error("Unknown value: $value")
             }
         }
     }
@@ -58,41 +57,36 @@ enum class HandShape {
 data class Match(val selfHand: HandShape, val otherHand: HandShape)
 
 fun round(match: Match): Outcome {
-    return when (match.selfHand) {
-        HandShape.Rock -> when (match.otherHand) {
-            HandShape.Rock -> Outcome.Draw
-            HandShape.Paper -> Outcome.Loss
-            HandShape.Scissors -> Outcome.Win
-        }
+    return when (match.selfHand to match.otherHand) {
+        Rock to Scissors -> Outcome.Win
+        Rock to Paper -> Outcome.Loss
+        Rock to Rock -> Outcome.Draw
 
-        HandShape.Paper -> when (match.otherHand) {
-            HandShape.Rock -> Outcome.Win
-            HandShape.Paper -> Outcome.Draw
-            HandShape.Scissors -> Outcome.Loss
-        }
+        Paper to Rock -> Outcome.Win
+        Paper to Scissors -> Outcome.Loss
+        Paper to Paper -> Outcome.Draw
 
-        HandShape.Scissors -> when (match.otherHand) {
-            HandShape.Rock -> Outcome.Loss
-            HandShape.Paper -> Outcome.Win
-            HandShape.Scissors -> Outcome.Draw
-        }
+        Scissors to Paper -> Outcome.Win
+        Scissors to Rock -> Outcome.Loss
+        Scissors to Scissors -> Outcome.Draw
+        else -> error("Unknown match: $match")
     }
 }
 
 fun chooseHandShape(opponentHand: HandShape, outcome: Outcome): HandShape {
     return when (outcome) {
         Outcome.Win -> when (opponentHand) {
-            HandShape.Rock -> HandShape.Paper
-            HandShape.Paper -> HandShape.Scissors
-            HandShape.Scissors -> HandShape.Rock
+            Rock -> Paper
+            Paper -> Scissors
+            Scissors -> Rock
         }
 
         Outcome.Draw -> opponentHand
 
         Outcome.Loss -> when (opponentHand) {
-            HandShape.Rock -> HandShape.Scissors
-            HandShape.Paper -> HandShape.Rock
-            HandShape.Scissors -> HandShape.Paper
+            Rock -> Scissors
+            Paper -> Rock
+            Scissors -> Paper
         }
     }
 }
@@ -101,15 +95,8 @@ fun List<Match>.score(): Point {
     return this.sumOf { round(it).point + it.selfHand.point }
 }
 
-enum class Outcome {
-    Win, Draw, Loss;
-
-    val point: Point
-        get() = when (this) {
-            Win -> 6
-            Draw -> 3
-            Loss -> 0
-        }
+enum class Outcome(val point: Point) {
+    Win(6), Draw(3), Loss(0);
 
     companion object {
         fun fromString(value: String): Outcome {
@@ -117,17 +104,13 @@ enum class Outcome {
                 "X" -> Loss
                 "Y" -> Draw
                 "Z" -> Win
-                else -> throw IllegalArgumentException("Unknown value: $value")
+                else -> error("Unknown value: $value")
             }
         }
     }
 }
 
-fun HandShape.Companion.guessFromSelf(value: String): HandShape {
-    return when (value) {
-        "X" -> HandShape.Rock
-        "Y" -> HandShape.Paper
-        "Z" -> HandShape.Scissors
-        else -> throw IllegalArgumentException("Unknown value: $value")
-    }
+fun splitFromSpace(string: String): Pair<String, String> {
+    val (first, second) = string.split(" ")
+    return Pair(first, second)
 }
