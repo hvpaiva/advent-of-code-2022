@@ -17,23 +17,21 @@ data object Part2 : DayPuzzle.PartPuzzle<String>("Part 2", "MCD") {
 }
 
 fun solve(mover: CrateMover, input: List<String>): String {
-    val (moves, cargoMap) = toMovementsAndCargoMap(input)
+    val (moves, cargoVisualization) = toMovementsAndCargoVisuslization(input)
 
-    val cargoStore = createCargoStore(cargoMap, mover)
-    val movements = moves.map { movement(it) }
-    with(cargoStore) {
-        movements
-            .forEach { (quantity, origin, destination) ->
-                // Bonus DSL style call, it could be replaced just by:
-                // move(quantity, origin, destination) in CargoStore
-                move(quantity) from origin to destination
-            }
-    }
+    val cargoStore = CargoStore.fromCargoVisualization(cargoVisualization, mover)
+    val movements = moves.map { Movement.of(it) }
 
-    return cargoStore.lasts()
+    return within(cargoStore) {
+        movements.forEach { (quantity, origin, destination) ->
+            // Bonus DSL style call, it could be replaced just by:
+            // move(quantity, origin, destination) in CargoStore
+            move(quantity) from origin to destination
+        }
+    }.lasts()
 }
 
-fun toMovementsAndCargoMap(input: List<String>): Pair<List<String>, List<String>> {
+fun toMovementsAndCargoVisuslization(input: List<String>): Pair<List<String>, List<String>> {
     return input
         .filter { it.isNotEmpty() }
         .partition { "move" in it }
@@ -44,6 +42,28 @@ enum class CrateMover {
 }
 
 data class CargoStore(val stacks: List<ArrayDeque<Crate>>, val mover: CrateMover) {
+    companion object {
+        fun fromCargoVisualization(cargoVisualization: List<String>, mover: CrateMover): CargoStore {
+            val stackMap = mutableMapOf<Int, ArrayDeque<Crate>>()
+
+            val crateRegex = Regex("""\[(\w)]""")
+
+            for (line in cargoVisualization) {
+                crateRegex.findAll(line).also { crates ->
+                    for (match in crates) {
+                        val crateName = match.groupValues[1]
+                        val stackNumber = match.range.first / 3
+                        val crate = Crate(crateName)
+
+                        stackMap.computeIfAbsent(stackNumber) { ArrayDeque() }.addFirst(crate)
+                    }
+                }
+            }
+
+            return CargoStore(stackMap.toSortedMap().values.toList(), mover)
+        }
+    }
+
     private fun takeLasts(): List<Crate> {
         return stacks.map { it.last() }
     }
@@ -82,25 +102,24 @@ data class CargoStore(val stacks: List<ArrayDeque<Crate>>, val mover: CrateMover
 
     override fun toString(): String {
         val maxRows = stacks.maxOf { it.size }
-        val sb = StringBuilder()
 
-        for (row in maxRows - 1 downTo 0) {
-            for (stack in stacks.indices) {
-                val crate = if (row < stacks[stack].size) {
-                    stacks[stack][row].toString()
-                } else {
-                    "   "
+        return buildString {
+            for (row in maxRows - 1 downTo 0) {
+                for (stack in stacks.indices) {
+                    val crate = if (row < stacks[stack].size) {
+                        stacks[stack][row].toString()
+                    } else {
+                        "   "
+                    }
+                    append(crate.padEnd(4))
                 }
-                sb.append(crate.padEnd(4))
+                append("\n")
             }
-            sb.append("\n")
-        }
 
-        for (stackNumber in 1..stacks.size) {
-            sb.append(stackNumber.toString().padStart(2).padEnd(4))
+            for (stackNumber in 1..stacks.size) {
+                append(stackNumber.toString().padStart(2).padEnd(4))
+            }
         }
-
-        return sb.toString()
     }
 }
 
@@ -109,34 +128,16 @@ value class Crate(val name: String) {
     override fun toString(): String = "[$name]"
 }
 
-data class Movement(val quantity: Int, var from: Int, var to: Int)
+data class Movement(val quantity: Int, var from: Int, var to: Int) {
+    companion object {
+        fun of(moveString: String): Movement {
+            val (quantity, from, to) = Regex("""move (\d+) from (\d+) to (\d+)""")
+                .find(moveString)!!
+                .destructured
 
-fun movement(move: String): Movement {
-    val (quantity, from, to) = Regex("""move (\d+) from (\d+) to (\d+)""")
-        .find(move)!!
-        .destructured
-
-    return Movement(quantity.toInt(), from.toInt(), to.toInt())
-}
-
-fun createCargoStore(lines: List<String>, mover: CrateMover): CargoStore {
-    val stackMap = mutableMapOf<Int, ArrayDeque<Crate>>()
-
-    val crateRegex = Regex("""\[(\w)]""")
-
-    for (line in lines) {
-        val crates = crateRegex.findAll(line)
-
-        for (match in crates) {
-            val crateName = match.groupValues[1]
-            val stackNumber = match.range.first / 3
-            val crate = Crate(crateName)
-
-            stackMap.computeIfAbsent(stackNumber) { ArrayDeque() }.addFirst(crate)
+            return Movement(quantity.toInt(), from.toInt(), to.toInt())
         }
     }
-
-    return CargoStore(stackMap.toSortedMap().values.toList(), mover)
 }
 
 /**
@@ -166,4 +167,15 @@ class move(private val n: Int) {
         move(n, origin!!, destination)
         return this
     }
+}
+
+/**
+ * This function is the same as the Kotlin standard library's [apply] function,
+ * but with a "better" name to express the notion of the context receiver being passed.
+ */
+inline fun <T, R> within(
+    receiver: T,
+    block: T.() -> R
+): T {
+    return receiver.apply { block() }
 }

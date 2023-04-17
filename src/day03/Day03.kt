@@ -20,7 +20,7 @@ data object Part1 : DayPuzzle.PartPuzzle<Int>("Part 1", 157) {
 data object Part2 : DayPuzzle.PartPuzzle<Int>("Part 2", 70) {
     override fun solve(input: List<String>): Int {
         return input
-            .windowed(3, 3)
+            .chunked(3)
             .map { discoverBadge(it) }
             .sumOf { priority(it) }
     }
@@ -40,8 +40,8 @@ fun priority(item: String): Int {
 }
 
 fun duplicatedStrings(first: String, second: String): String {
-    val firstChars = first.toCharArray().toMutableList()
-    val secondChars = second.toCharArray().toMutableList()
+    val firstChars = first.asIterable()
+    val secondChars = second.asIterable()
 
     val result = mutableSetOf<Char>()
 
